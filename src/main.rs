@@ -1,83 +1,95 @@
-use bevy::prelude::*;
+use bevy::{input::keyboard::KeyCode, prelude::*, sprite::MaterialMesh2dBundle};
 
 const PADDLE_SPEED: f32 = 500.0;
 const PADDLE_HEIGHT: f32 = 100.0;
 const PADDLE_WIDTH: f32 = 20.0;
 const BALL_SIZE: f32 = 10.0;
 
+#[derive(Component)]
 struct Paddle {
-    velocity: Vec2,
+    velocity: Vec3,
 }
 
+#[derive(Component)]
 struct Ball {
-    velocity: Vec2,
+    velocity: Vec3,
 }
 
 fn setup(mut commands: Commands) {
+    // Create camera
+    commands.spawn(Camera2dBundle::default());
+    // Create paddle sprite
+    let paddle_sprite = Sprite {
+        color: Color::rgb(1.0, 1.0, 1.0),
+        custom_size: Some(Vec2::new(PADDLE_WIDTH, PADDLE_HEIGHT)),
+        ..default()
+    };
     // Spawn paddles
     commands
-        .spawn(SpriteBundle {
-            material: Color::WHITE.into(),
-            sprite: Sprite::new(Vec2::new(PADDLE_WIDTH, PADDLE_HEIGHT)),
-            translation: Transform2d::from_translation(Vec2::new(-400.0, 0.0)),
-            ..Default::default()
-        })
-        .insert(Paddle {
-            velocity: Vec2::ZERO,
-        });
+        .spawn((SpriteBundle {
+            sprite: paddle_sprite.clone(),
+            transform: Transform::from_translation(Vec3::new(-400.0, 0.0, 0.0)),
+            ..default()
+        }, Paddle {
+            velocity: Vec3::ZERO,
+        }));
+        
 
     commands
-        .spawn(SpriteBundle {
-            material: Color::WHITE.into(),
-            sprite: Sprite::new(Vec2::new(PADDLE_WIDTH, PADDLE_HEIGHT)),
-            translation: Transform2d::from_translation(Vec2::new(400.0, 0.0)),
-            ..Default::default()
-        })
-        .insert(Paddle {
-            velocity: Vec2::ZERO,
-        });
+        .spawn((SpriteBundle {
+            sprite: paddle_sprite.clone(),
+            transform: Transform::from_translation(Vec3::new(400.0, 0.0, 0.0)),
+            ..default()
+        }, Paddle {
+            velocity: Vec3::ZERO,
+        }));
 
+    // Create ball sprite
+    let ball_sprite = Sprite {
+        color: Color::rgb(1.0, 1.0, 1.0),
+        custom_size: Some(Vec2::new(BALL_SIZE, BALL_SIZE)),
+        ..default()
+    };
     // Spawn ball
     commands
-        .spawn(SpriteBundle {
-            material: Color::WHITE.into(),
-            sprite: Sprite::new(Vec2::new(BALL_SIZE, BALL_SIZE)),
-            translation: Transform2d::from_translation(Vec2::new(0.0, 0.0)),
-            ..Default::default()
-        })
-        .insert(Ball {
-            velocity: Vec2::new(300.0, 150.0, 0.0),
-        });
+        .spawn((SpriteBundle {
+            sprite: ball_sprite,
+            transform: Transform::from_translation(Vec3::ZERO),
+            ..default()
+        }, Ball {
+            velocity: Vec3::new(300.0, 150.0, 0.0),
+        }));
 }
 
-fn paddle_movement(keyboard_input: Res<KeyCodes>, mut query: Query<(&mut Paddle, &Transform2d)>) {
-    for (mut paddle, transform) in query.iter_mut() {
-        let mut movement = Vec2::ZERO;
-        if keyboard_input.pressed(KeyCodes::A) {
-            movement.y -= 1.0;
+fn paddle_movement(
+    keyboard_input: Res<Input<KeyCode>>,
+    mut query: Query<(&mut Transform, &Paddle)>,
+    time: Res<Time>,
+) {
+    for (mut transform, paddle) in query.iter_mut() {
+        let mut direction = paddle.velocity.clone();
+        if keyboard_input.pressed(KeyCode::A) {
+            direction.x -= 1.0;
         }
-        if keyboard_input.pressed(KeyCodes::D) {
-            movement.y += 1.0;
+        if keyboard_input.pressed(KeyCode::D) {
+            direction.x += 1.0;
         }
-        if keyboard_input.pressed(KeyCodes::W) {
-            movement.x -= 1.0;
+        if keyboard_input.pressed(KeyCode::W) {
+            direction.y += 1.0;
         }
-        if keyboard_input.pressed(KeyCodes::S) {
-            movement.x += 1.0;
+        if keyboard_input.pressed(KeyCode::S) {
+            direction.y -= 1.0;
         }
-        if !movement.is_zero() {
-            paddle.velocity = movement.normalize() * PADDLE_SPEED;
-        } else {
-            paddle.velocity = Vec2::ZERO;
+        if direction.length() > 0.0 {
+            direction = direction.normalize();
         }
 
-        transform.translation.x = transform.translation.x.min(390.0).max(-390.0);
-        transform.translation.y = transform.translation.y.min(290.0).max(-290.0);
+        transform.translation += direction * PADDLE_SPEED * time.delta_seconds();
     }
 }
 
-fn ball_movement(mut query: Query<(&mut Ball, &Transform2d)>) {
-    for (mut ball, transform) in query.iter_mut() {
+fn ball_movement(mut query: Query<(&mut Transform, &mut Ball)>) {
+    for (mut transform, mut ball) in query.iter_mut() {
         transform.translation += ball.velocity * 0.02;
 
         // Reverse ball's direction when hitting the top or bottom of the window
@@ -88,10 +100,10 @@ fn ball_movement(mut query: Query<(&mut Ball, &Transform2d)>) {
 }
 
 fn main() {
-    App::build()
+    App::new()
         .add_plugins(DefaultPlugins)
-        .add_startup_system(setup.system())
-        .add_system(paddle_movement.system_2d())
-        .add_system(ball_movement.system_2d())
-        .run()
+        .add_systems(Startup, setup)
+        .add_systems(Update, paddle_movement)
+        .add_systems(Update, ball_movement)
+        .run();
 }
