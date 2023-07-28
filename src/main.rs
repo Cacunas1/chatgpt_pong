@@ -17,7 +17,12 @@ struct Ball {
     bounce: Vec<bool>,
 }
 
-fn setup(mut commands: Commands) {
+#[derive(Component)]
+struct MyMusic {
+    name: String,
+}
+
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Create camera
     commands.spawn(Camera2dBundle::default());
     // Create paddle sprite
@@ -61,6 +66,16 @@ fn setup(mut commands: Commands) {
         Ball {
             velocity: Vec3::new(300.0, 150.0, 0.0),
             bounce: vec![true, true],
+        },
+    ));
+    // Spawn sound
+    commands.spawn((
+        AudioBundle {
+            source: asset_server.load("audio/explosionCrunch_000.ogg"),
+            ..default()
+        },
+        MyMusic {
+            name: String::from("point"),
         },
     ));
 }
@@ -109,7 +124,7 @@ fn paddle_movement(
     }
 }
 
-fn ball_movement(mut query: Query<(&mut Transform, &mut Ball)>, time: Res<Time>) {
+fn ball_movement(mut query: Query<(&mut Transform, &mut Ball)>, time: Res<Time>, query_music: Query<&AudioSink, With<MyMusic>>,) {
     for (mut transform, mut ball) in query.iter_mut() {
         let mut v = ball.velocity;
         if !v.is_normalized() {
@@ -126,6 +141,10 @@ fn ball_movement(mut query: Query<(&mut Transform, &mut Ball)>, time: Res<Time>)
             transform.translation = Vec3::ZERO;
             ball.velocity *= -1.0;
             ball.bounce = vec![true, true];
+
+            if let Ok(sink) = query_music.get_single() {
+                sink.toggle();
+            }
         }
     }
 }
@@ -136,17 +155,11 @@ fn ball_paddle_collision(mut ball_query: Query<(&Transform, &mut Ball), With<Bal
             let i = usize::from(paddle.id);
             let dist = b_transform.translation.distance(p_transform.translation);
 
-            println!("Distancia entre paleta y pelota: {dist}");
-            println!("->bounce[i={i}]: {}", ball.bounce[i]);
-
             if dist <= 350.0 {
                 let b_x = b_transform.translation.x;
                 let b_y = b_transform.translation.y;
                 let p_x = p_transform.translation.x;
                 let p_y = p_transform.translation.y;
-
-                println!("Posición Pelota: ({b_x}, {b_y})");
-                println!("Posición Paleta: ({p_x}, {p_y})");
 
                 if ((paddle.id == 1) && (
                     (
@@ -165,18 +178,11 @@ fn ball_paddle_collision(mut ball_query: Query<(&Transform, &mut Ball), With<Bal
                         (b_y + 0.5 * BALL_SIZE) <= (p_y + 0.5 * PADDLE_HEIGHT)
                     )
                 )) {
-                    println!("========================================================");
-                    println!("\t\tSe cumplen las condiciones!!!");
-                    println!("\t\tVelocidad de la pelota antes: {:?}", ball.velocity);
                     if ball.bounce[i] {
                         ball.bounce[i] = false;
                         ball.bounce[(i + 1) % 2] = true;
                         ball.velocity.x *= -1.0;
-                        println!("-->bounce[i={i}]: {}", ball.bounce[i]);
                     }
-
-                    println!("\t\tVelocidad de la pelota después: {:?}", ball.velocity);
-                    println!("========================================================");
                 }
             }
         }
