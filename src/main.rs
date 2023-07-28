@@ -3,8 +3,8 @@ use bevy::{input::keyboard::KeyCode, prelude::*};
 const PADDLE_SPEED: f32 = 500.0;
 const PADDLE_HEIGHT: f32 = 100.0;
 const PADDLE_WIDTH: f32 = 20.0;
-const BALL_SPEED: f32 = 450.0;
-const BALL_SIZE: f32 = 10.0;
+const BALL_SPEED: f32 = 250.0;
+const BALL_SIZE: f32 = PADDLE_WIDTH;
 
 #[derive(Component)]
 struct Paddle {
@@ -14,6 +14,7 @@ struct Paddle {
 #[derive(Component)]
 struct Ball {
     velocity: Vec3,
+    bounce: Vec<bool>,
 }
 
 fn setup(mut commands: Commands) {
@@ -46,7 +47,7 @@ fn setup(mut commands: Commands) {
 
     // Create ball sprite
     let ball_sprite = Sprite {
-        color: Color::rgb(1.0, 1.0, 1.0),
+        color: Color::rgb(1.0, 0.0, 0.0),
         custom_size: Some(Vec2::new(BALL_SIZE, BALL_SIZE)),
         ..default()
     };
@@ -59,6 +60,7 @@ fn setup(mut commands: Commands) {
         },
         Ball {
             velocity: Vec3::new(300.0, 150.0, 0.0),
+            bounce: vec![true, true],
         },
     ));
 }
@@ -123,6 +125,60 @@ fn ball_movement(mut query: Query<(&mut Transform, &mut Ball)>, time: Res<Time>)
         if transform.translation.x > 400.0 || transform.translation.x < -400.0 {
             transform.translation = Vec3::ZERO;
             ball.velocity *= -1.0;
+            ball.bounce = vec![true, true];
+        }
+    }
+}
+
+fn ball_paddle_collision(mut ball_query: Query<(&Transform, &mut Ball), With<Ball>>, paddle_query: Query<(&Transform, &Paddle), With<Paddle>>) {
+    if let Ok((b_transform, mut ball)) = ball_query.get_single_mut() {
+        for (p_transform, paddle) in paddle_query.iter() {
+            let i = usize::from(paddle.id);
+            let dist = b_transform.translation.distance(p_transform.translation);
+
+            println!("Distancia entre paleta y pelota: {dist}");
+            println!("->bounce[i={i}]: {}", ball.bounce[i]);
+
+            if dist <= 350.0 {
+                let b_x = b_transform.translation.x;
+                let b_y = b_transform.translation.y;
+                let p_x = p_transform.translation.x;
+                let p_y = p_transform.translation.y;
+
+                println!("Posición Pelota: ({b_x}, {b_y})");
+                println!("Posición Paleta: ({p_x}, {p_y})");
+
+                if ((paddle.id == 1) && (
+                    (
+                        (b_x + 0.5 * BALL_SIZE) >= (p_x - 0.5 * PADDLE_WIDTH)
+                    ) && (
+                        (b_y - 0.5 * BALL_SIZE) >= (p_y - 0.5 * PADDLE_HEIGHT)
+                    ) && (
+                        (b_y + 0.5 * BALL_SIZE) <= (p_y + 0.5 * PADDLE_HEIGHT)
+                    )
+                )) || ((paddle.id == 0) && (
+                    (
+                        (b_x - 0.5 * BALL_SIZE) <= (p_x + 0.5 * PADDLE_WIDTH)
+                    ) && (
+                        (b_y - 0.5 * BALL_SIZE) >= (p_y - 0.5 * PADDLE_HEIGHT)
+                    ) && (
+                        (b_y + 0.5 * BALL_SIZE) <= (p_y + 0.5 * PADDLE_HEIGHT)
+                    )
+                )) {
+                    println!("========================================================");
+                    println!("\t\tSe cumplen las condiciones!!!");
+                    println!("\t\tVelocidad de la pelota antes: {:?}", ball.velocity);
+                    if ball.bounce[i] {
+                        ball.bounce[i] = false;
+                        ball.bounce[(i + 1) % 2] = true;
+                        ball.velocity.x *= -1.0;
+                        println!("-->bounce[i={i}]: {}", ball.bounce[i]);
+                    }
+
+                    println!("\t\tVelocidad de la pelota después: {:?}", ball.velocity);
+                    println!("========================================================");
+                }
+            }
         }
     }
 }
@@ -133,5 +189,6 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(Update, paddle_movement)
         .add_systems(Update, ball_movement)
+        .add_systems(Update, ball_paddle_collision)
         .run();
 }
