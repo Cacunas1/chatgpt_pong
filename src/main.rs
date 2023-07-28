@@ -1,13 +1,14 @@
-use bevy::{input::keyboard::KeyCode, prelude::*, sprite::MaterialMesh2dBundle};
+use bevy::{input::keyboard::KeyCode, prelude::*};
 
 const PADDLE_SPEED: f32 = 500.0;
 const PADDLE_HEIGHT: f32 = 100.0;
 const PADDLE_WIDTH: f32 = 20.0;
+const BALL_SPEED: f32 = 450.0;
 const BALL_SIZE: f32 = 10.0;
 
 #[derive(Component)]
 struct Paddle {
-    velocity: Vec3,
+    id: u8,
 }
 
 #[derive(Component)]
@@ -25,24 +26,23 @@ fn setup(mut commands: Commands) {
         ..default()
     };
     // Spawn paddles
-    commands
-        .spawn((SpriteBundle {
+    commands.spawn((
+        SpriteBundle {
             sprite: paddle_sprite.clone(),
             transform: Transform::from_translation(Vec3::new(-400.0, 0.0, 0.0)),
             ..default()
-        }, Paddle {
-            velocity: Vec3::ZERO,
-        }));
-        
+        },
+        Paddle { id: 0 },
+    ));
 
-    commands
-        .spawn((SpriteBundle {
+    commands.spawn((
+        SpriteBundle {
             sprite: paddle_sprite.clone(),
             transform: Transform::from_translation(Vec3::new(400.0, 0.0, 0.0)),
             ..default()
-        }, Paddle {
-            velocity: Vec3::ZERO,
-        }));
+        },
+        Paddle { id: 1 },
+    ));
 
     // Create ball sprite
     let ball_sprite = Sprite {
@@ -51,14 +51,16 @@ fn setup(mut commands: Commands) {
         ..default()
     };
     // Spawn ball
-    commands
-        .spawn((SpriteBundle {
+    commands.spawn((
+        SpriteBundle {
             sprite: ball_sprite,
             transform: Transform::from_translation(Vec3::ZERO),
             ..default()
-        }, Ball {
+        },
+        Ball {
             velocity: Vec3::new(300.0, 150.0, 0.0),
-        }));
+        },
+    ));
 }
 
 fn paddle_movement(
@@ -67,34 +69,60 @@ fn paddle_movement(
     time: Res<Time>,
 ) {
     for (mut transform, paddle) in query.iter_mut() {
-        let mut direction = paddle.velocity.clone();
-        if keyboard_input.pressed(KeyCode::A) {
-            direction.x -= 1.0;
+        let mut direction = Vec3::ZERO;
+
+        if paddle.id == 0 {
+            if keyboard_input.pressed(KeyCode::A) {
+                direction.x -= 1.0;
+            }
+            if keyboard_input.pressed(KeyCode::D) {
+                direction.x += 1.0;
+            }
+            if keyboard_input.pressed(KeyCode::W) {
+                direction.y += 1.0;
+            }
+            if keyboard_input.pressed(KeyCode::S) {
+                direction.y -= 1.0;
+            }
         }
-        if keyboard_input.pressed(KeyCode::D) {
-            direction.x += 1.0;
+        if paddle.id == 1 {
+            if keyboard_input.pressed(KeyCode::Left) {
+                direction.x -= 1.0;
+            }
+            if keyboard_input.pressed(KeyCode::Right) {
+                direction.x += 1.0;
+            }
+            if keyboard_input.pressed(KeyCode::Up) {
+                direction.y += 1.0;
+            }
+            if keyboard_input.pressed(KeyCode::Down) {
+                direction.y -= 1.0;
+            }
         }
-        if keyboard_input.pressed(KeyCode::W) {
-            direction.y += 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::S) {
-            direction.y -= 1.0;
-        }
+
         if direction.length() > 0.0 {
             direction = direction.normalize();
         }
-
         transform.translation += direction * PADDLE_SPEED * time.delta_seconds();
     }
 }
 
-fn ball_movement(mut query: Query<(&mut Transform, &mut Ball)>) {
+fn ball_movement(mut query: Query<(&mut Transform, &mut Ball)>, time: Res<Time>) {
     for (mut transform, mut ball) in query.iter_mut() {
-        transform.translation += ball.velocity * 0.02;
+        let mut v = ball.velocity;
+        if !v.is_normalized() {
+            v = v.normalize();
+        }
+        transform.translation += v * BALL_SPEED * time.delta_seconds();
+        ball.velocity = v;
 
         // Reverse ball's direction when hitting the top or bottom of the window
         if transform.translation.y >= 290.0 || transform.translation.y <= -290.0 {
             ball.velocity.y *= -1.0;
+        }
+        if transform.translation.x > 400.0 || transform.translation.x < -400.0 {
+            transform.translation = Vec3::ZERO;
+            ball.velocity *= -1.0;
         }
     }
 }
