@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 bevy = "0.11"
+cond_utils = "0.1.0"

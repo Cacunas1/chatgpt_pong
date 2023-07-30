@@ -1,10 +1,14 @@
 use bevy::{input::keyboard::KeyCode, prelude::*};
+use cond_utils::Between;
 
 const PADDLE_SPEED: f32 = 500.0;
 const PADDLE_HEIGHT: f32 = 100.0;
 const PADDLE_WIDTH: f32 = 20.0;
+const PADDLE_HALF_WIDTH: f32 = 0.5 * PADDLE_WIDTH;
+const PADDLE_HALF_HEIGHT: f32 = 0.5 * PADDLE_HEIGHT;
 const BALL_SPEED: f32 = 250.0;
 const BALL_SIZE: f32 = PADDLE_WIDTH;
+const BALL_HALF_SIZE: f32 = 0.5 * BALL_SIZE;
 
 #[derive(Component)]
 struct Paddle {
@@ -124,7 +128,11 @@ fn paddle_movement(
     }
 }
 
-fn ball_movement(mut query: Query<(&mut Transform, &mut Ball)>, time: Res<Time>, query_music: Query<&AudioSink, With<MyMusic>>,) {
+fn ball_movement(
+    mut query: Query<(&mut Transform, &mut Ball)>,
+    time: Res<Time>,
+    query_music: Query<&AudioSink, With<MyMusic>>,
+) {
     for (mut transform, mut ball) in query.iter_mut() {
         let mut v = ball.velocity;
         if !v.is_normalized() {
@@ -143,13 +151,16 @@ fn ball_movement(mut query: Query<(&mut Transform, &mut Ball)>, time: Res<Time>,
             ball.bounce = vec![true, true];
 
             if let Ok(sink) = query_music.get_single() {
-                sink.toggle();
+                sink.play();
             }
         }
     }
 }
 
-fn ball_paddle_collision(mut ball_query: Query<(&Transform, &mut Ball), With<Ball>>, paddle_query: Query<(&Transform, &Paddle), With<Paddle>>) {
+fn ball_paddle_collision(
+    mut ball_query: Query<(&Transform, &mut Ball), With<Ball>>,
+    paddle_query: Query<(&Transform, &Paddle), With<Paddle>>,
+) {
     if let Ok((b_transform, mut ball)) = ball_query.get_single_mut() {
         for (p_transform, paddle) in paddle_query.iter() {
             let i = usize::from(paddle.id);
@@ -161,23 +172,10 @@ fn ball_paddle_collision(mut ball_query: Query<(&Transform, &mut Ball), With<Bal
                 let p_x = p_transform.translation.x;
                 let p_y = p_transform.translation.y;
 
-                if ((paddle.id == 1) && (
-                    (
-                        (b_x + 0.5 * BALL_SIZE) >= (p_x - 0.5 * PADDLE_WIDTH)
-                    ) && (
-                        (b_y - 0.5 * BALL_SIZE) >= (p_y - 0.5 * PADDLE_HEIGHT)
-                    ) && (
-                        (b_y + 0.5 * BALL_SIZE) <= (p_y + 0.5 * PADDLE_HEIGHT)
-                    )
-                )) || ((paddle.id == 0) && (
-                    (
-                        (b_x - 0.5 * BALL_SIZE) <= (p_x + 0.5 * PADDLE_WIDTH)
-                    ) && (
-                        (b_y - 0.5 * BALL_SIZE) >= (p_y - 0.5 * PADDLE_HEIGHT)
-                    ) && (
-                        (b_y + 0.5 * BALL_SIZE) <= (p_y + 0.5 * PADDLE_HEIGHT)
-                    )
-                )) {
+                let ball_in_range_x = b_x.within(p_x - (PADDLE_HALF_WIDTH + BALL_HALF_SIZE), p_x + (PADDLE_HALF_WIDTH + BALL_HALF_SIZE));
+                let ball_in_range_y = b_y.within(p_y - (PADDLE_HALF_HEIGHT + BALL_HALF_SIZE), p_y + (PADDLE_HALF_HEIGHT + BALL_HALF_SIZE));
+
+                if ball_in_range_x && ball_in_range_y {
                     if ball.bounce[i] {
                         ball.bounce[i] = false;
                         ball.bounce[(i + 1) % 2] = true;
