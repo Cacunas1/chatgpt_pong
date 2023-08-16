@@ -19,6 +19,7 @@ struct Paddle {
 struct Ball {
     velocity: Vec3,
     bounce: Vec<bool>,
+    score: Vec<u8>
 }
 
 #[derive(Component)]
@@ -70,6 +71,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         Ball {
             velocity: Vec3::new(300.0, 150.0, 0.0),
             bounce: vec![true, true],
+            score: vec![0, 0],
         },
     ));
     // Spawn sound
@@ -131,7 +133,7 @@ fn paddle_movement(
 fn ball_movement(
     mut query: Query<(&mut Transform, &mut Ball)>,
     time: Res<Time>,
-    query_music: Query<&AudioSink, With<MyMusic>>,
+    query_music: Query<(&AudioSink, &MyMusic)>,
 ) {
     for (mut transform, mut ball) in query.iter_mut() {
         let mut v = ball.velocity;
@@ -150,8 +152,16 @@ fn ball_movement(
             ball.velocity *= -1.0;
             ball.bounce = vec![true, true];
 
-            if let Ok(sink) = query_music.get_single() {
-                sink.play();
+            if transform.translation.x >= 400.0 {
+                ball.score[1] += 1;
+            } else if transform.translation.x <= -400.0 {
+                ball.score[0] += 1;
+            }
+
+            if let Ok(sink, sound) = query_music.get_single() {
+                if sound.name == "point" {
+                    sink.play();
+                }
             }
         }
     }
