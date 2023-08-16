@@ -1,3 +1,4 @@
+use bevy::window::PrimaryWindow;
 use bevy::{input::keyboard::KeyCode, prelude::*};
 use cond_utils::Between;
 
@@ -11,19 +12,19 @@ const BALL_SIZE: f32 = PADDLE_WIDTH;
 const BALL_HALF_SIZE: f32 = 0.5 * BALL_SIZE;
 
 #[derive(Component)]
-struct Paddle {
+pub struct Paddle {
     id: u8,
 }
 
 #[derive(Component)]
-struct Ball {
+pub struct Ball {
     velocity: Vec3,
     bounce: Vec<bool>,
-    score: Vec<u8>
+    score: Vec<u8>,
 }
 
 #[derive(Component)]
-struct MyMusic {
+pub struct MyMusic {
     name: String,
 }
 
@@ -133,8 +134,16 @@ fn paddle_movement(
 fn ball_movement(
     mut query: Query<(&mut Transform, &mut Ball)>,
     time: Res<Time>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
     query_music: Query<(&AudioSink, &MyMusic)>,
 ) {
+    let window = window_query.get_single().unwrap();
+
+    let x_min = -0.5 * window.width() + BALL_HALF_SIZE;
+    let x_max = 0.5 * window.width() - BALL_HALF_SIZE;
+    let y_min = -0.5 * window.height() + BALL_HALF_SIZE;
+    let y_max = 0.5 * window.height() - BALL_HALF_SIZE;
+
     for (mut transform, mut ball) in query.iter_mut() {
         let mut v = ball.velocity;
         if !v.is_normalized() {
@@ -144,23 +153,23 @@ fn ball_movement(
         ball.velocity = v;
 
         // Reverse ball's direction when hitting the top or bottom of the window
-        if transform.translation.y >= 290.0 || transform.translation.y <= -290.0 {
+        if transform.translation.y >= y_max || transform.translation.y <= y_min {
             ball.velocity.y *= -1.0;
         }
-        if transform.translation.x > 400.0 || transform.translation.x < -400.0 {
+        if transform.translation.x > x_max || transform.translation.x < x_min {
             transform.translation = Vec3::ZERO;
             ball.velocity *= -1.0;
             ball.bounce = vec![true, true];
 
-            if transform.translation.x >= 400.0 {
+            if transform.translation.x >= x_max {
                 ball.score[1] += 1;
-            } else if transform.translation.x <= -400.0 {
+            } else if transform.translation.x <= x_min {
                 ball.score[0] += 1;
             }
 
-            if let Ok(sink, sound) = query_music.get_single() {
-                if sound.name == "point" {
-                    sink.play();
+            if let Ok(sink) = query_music.get_single() {
+                if sink.1.name == "point" {
+                    sink.0.play();
                 }
             }
         }
@@ -182,18 +191,53 @@ fn ball_paddle_collision(
                 let p_x = p_transform.translation.x;
                 let p_y = p_transform.translation.y;
 
-                let ball_in_range_x = b_x.within(p_x - (PADDLE_HALF_WIDTH + BALL_HALF_SIZE), p_x + (PADDLE_HALF_WIDTH + BALL_HALF_SIZE));
-                let ball_in_range_y = b_y.within(p_y - (PADDLE_HALF_HEIGHT + BALL_HALF_SIZE), p_y + (PADDLE_HALF_HEIGHT + BALL_HALF_SIZE));
+                let ball_in_range_x = b_x.within(
+                    p_x - (PADDLE_HALF_WIDTH + BALL_HALF_SIZE),
+                    p_x + (PADDLE_HALF_WIDTH + BALL_HALF_SIZE),
+                );
+                let ball_in_range_y = b_y.within(
+                    p_y - (PADDLE_HALF_HEIGHT + BALL_HALF_SIZE),
+                    p_y + (PADDLE_HALF_HEIGHT + BALL_HALF_SIZE),
+                );
 
-                if ball_in_range_x && ball_in_range_y {
-                    if ball.bounce[i] {
-                        ball.bounce[i] = false;
-                        ball.bounce[(i + 1) % 2] = true;
-                        ball.velocity.x *= -1.0;
-                    }
+                if ball_in_range_x && ball_in_range_y && ball.bounce[i] {
+                    ball.bounce[i] = false;
+                    ball.bounce[(i + 1) % 2] = true;
+                    ball.velocity.x *= -1.0;
                 }
             }
         }
+    }
+}
+
+pub fn confine_paddle_movement(
+    mut paddle_query: Query<&mut Transform, With<Paddle>>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+) {
+    let window = window_query.get_single().unwrap();
+
+    let x_min = -0.5 * window.width() + PADDLE_HALF_WIDTH;
+    let x_max = 0.5 * window.width() - PADDLE_HALF_WIDTH;
+    let y_min = -0.5 * window.height() + PADDLE_HALF_HEIGHT;
+    let y_max = 0.5 * window.height() - PADDLE_HALF_HEIGHT;
+
+    for mut paddle_transform in paddle_query.iter_mut() {
+        let mut translation = paddle_transform.translation;
+
+        if translation.x < x_min {
+            translation.x = x_min;
+        }
+        if translation.x > x_max {
+            translation.x = x_max;
+        }
+        if translation.y < y_min {
+            translation.y = y_min;
+        }
+        if translation.y > y_max {
+            translation.y = y_max;
+        }
+
+        paddle_transform.translation = translation;
     }
 }
 
@@ -204,5 +248,6 @@ fn main() {
         .add_systems(Update, paddle_movement)
         .add_systems(Update, ball_movement)
         .add_systems(Update, ball_paddle_collision)
+        .add_systems(Update, confine_paddle_movement)
         .run();
 }
