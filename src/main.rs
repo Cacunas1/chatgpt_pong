@@ -6,12 +6,12 @@ const PADDLE_HEIGHT: f32 = 100.0;
 const PADDLE_WIDTH: f32 = 20.0;
 const BALL_SIZE: f32 = 10.0;
 
-#[derive(Component)]
+#[derive(Component, Clone, Copy)]
 struct Paddle {
     velocity: Vec3,
 }
 
-#[derive(Component)]
+#[derive(Component, Clone, Copy)]
 struct Ball {
     velocity: Vec3,
 }
@@ -36,14 +36,33 @@ fn setup(
         let mut x: f32 = 0.0;
         let y: f32 = 0.0;
         let z: f32 = 0.0;
+        println!("i: {i}");
+        println!("n: {n}");
+        println!("shape: {:?}", shape);
         if i < n - 1 {
             x = f32::powf(-1 as f32, i as f32) * X_EXTENT * 0.5;
+            let res_type = Ball {
+                velocity: Vec3::new(300.0, 150.0, 0.0),
+            };
+            commands
+                .spawn((
+                    Mesh2d(shape),
+                    MeshMaterial2d(materials.add(color)),
+                    Transform::from_xyz(x, y, z),
+                ))
+                .insert(res_type);
+        } else {
+            let res_type = Paddle {
+                velocity: Vec3::ZERO,
+            };
+            commands
+                .spawn((
+                    Mesh2d(shape),
+                    MeshMaterial2d(materials.add(color)),
+                    Transform::from_xyz(x, y, z),
+                ))
+                .insert(res_type);
         }
-        commands.spawn((
-            Mesh2d(shape),
-            MeshMaterial2d(materials.add(color)),
-            Transform::from_xyz(x, y, z),
-        ));
     }
 
     // Spawn paddles
