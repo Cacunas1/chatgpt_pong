@@ -1,6 +1,7 @@
 use bevy::{input::keyboard::KeyCode, prelude::*};
 
 const X_EXTENT: f32 = 900.0;
+const Y_EXTENT: f32 = 900.0;
 const PADDLE_SPEED: f32 = 500.0;
 const PADDLE_HEIGHT: f32 = 100.0;
 const PADDLE_WIDTH: f32 = 20.0;
@@ -22,83 +23,48 @@ fn setup(
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     commands.spawn(Camera2d);
+    let l_padd = Rectangle::new(PADDLE_WIDTH, PADDLE_HEIGHT);
+    let r_padd = Rectangle::new(PADDLE_WIDTH, PADDLE_HEIGHT);
+    let ball = Rectangle::new(BALL_SIZE, BALL_SIZE);
 
-    let shapes = [
-        meshes.add(Rectangle::new(PADDLE_WIDTH, PADDLE_HEIGHT)),
-        meshes.add(Rectangle::new(PADDLE_WIDTH, PADDLE_HEIGHT)),
-        meshes.add(Rectangle::new(BALL_SIZE, BALL_SIZE)),
-    ];
+    // let mut shapes = [meshes.add(l_padd), meshes.add(r_padd), meshes.add(ball)];
+    let mut x: f32 = -0.5 * X_EXTENT;
+    let y: f32 = 0.0;
+    let z: f32 = 0.0;
 
-    let color = Color::WHITE;
-    let n = shapes.len();
+    commands
+        .spawn((
+            Mesh2d(meshes.add(l_padd)),
+            MeshMaterial2d(materials.add(Color::srgb(1.0, 0.0, 0.0))),
+            Transform::from_xyz(x, y, z),
+        ))
+        .insert(Paddle {
+            velocity: Vec3::ZERO,
+        });
 
-    for (i, shape) in shapes.into_iter().enumerate() {
-        let mut x: f32 = 0.0;
-        let y: f32 = 0.0;
-        let z: f32 = 0.0;
-        println!("i: {i}");
-        println!("n: {n}");
-        println!("shape: {:?}", shape);
-        if i < n - 1 {
-            x = f32::powf(-1 as f32, i as f32) * X_EXTENT * 0.5;
-            let res_type = Ball {
-                velocity: Vec3::new(300.0, 150.0, 0.0),
-            };
-            commands
-                .spawn((
-                    Mesh2d(shape),
-                    MeshMaterial2d(materials.add(color)),
-                    Transform::from_xyz(x, y, z),
-                ))
-                .insert(res_type);
-        } else {
-            let res_type = Paddle {
-                velocity: Vec3::ZERO,
-            };
-            commands
-                .spawn((
-                    Mesh2d(shape),
-                    MeshMaterial2d(materials.add(color)),
-                    Transform::from_xyz(x, y, z),
-                ))
-                .insert(res_type);
-        }
-    }
+    x = 0.5 * X_EXTENT;
 
-    // Spawn paddles
-    // commands
-    //     .spawn(Sprite {
-    //         material: Color::WHITE.into(),
-    //         sprite: Sprite::new(Vec2::new(PADDLE_WIDTH, PADDLE_HEIGHT)),
-    //         transform: Transform::from_translation(Vec3::new(-400.0, 0.0, 0.0)),
-    //         ..Default::default()
-    //     })
-    //     .insert(Paddle {
-    //         velocity: Vec3::ZERO,
-    //     });
+    commands
+        .spawn((
+            Mesh2d(meshes.add(r_padd)),
+            MeshMaterial2d(materials.add(Color::srgb(0.0, 0.0, 1.0))),
+            Transform::from_xyz(x, y, z),
+        ))
+        .insert(Paddle {
+            velocity: Vec3::ZERO,
+        });
 
-    // commands
-    //     .spawn(Sprite {
-    //         material: Color::WHITE.into(),
-    //         sprite: Sprite::new(Vec2::new(PADDLE_WIDTH, PADDLE_HEIGHT)),
-    //         transform: Transform::from_translation(Vec3::new(400.0, 0.0, 0.0)),
-    //         ..Default::default()
-    //     })
-    //     .insert(Paddle {
-    //         velocity: Vec3::ZERO,
-    //     });
+    x = 0.0;
 
-    // // Spawn ball
-    // commands
-    //     .spawn(Sprite {
-    //         material: Color::WHITE.into(),
-    //         sprite: Sprite::new(Vec2::new(BALL_SIZE, BALL_SIZE)),
-    //         transform: Transform::from_translation(Vec3::ZERO),
-    //         ..Default::default()
-    //     })
-    //     .insert(Ball {
-    //         velocity: Vec3::new(300.0, 150.0, 0.0),
-    //     });
+    commands
+        .spawn((
+            Mesh2d(meshes.add(ball)),
+            MeshMaterial2d(materials.add(Color::WHITE)),
+            Transform::from_xyz(x, y, z),
+        ))
+        .insert(Ball {
+            velocity: Vec3::new(300.0, 150.0, 0.0),
+        });
 }
 
 fn paddle_movement(
