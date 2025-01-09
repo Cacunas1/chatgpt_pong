@@ -1,140 +1,79 @@
 use bevy::{input::keyboard::KeyCode, prelude::*};
 
-const X_EXTENT: f32 = 900.0;
-const Y_EXTENT: f32 = 900.0;
-const PADDLE_SPEED: f32 = 500.0;
-const PADDLE_HEIGHT: f32 = 100.0;
-const PADDLE_WIDTH: f32 = 20.0;
-const BALL_SIZE: f32 = 10.0;
+// Component to mark our player rectangle
+#[derive(Component)]
+struct Player;
 
-#[derive(Clone, Copy)]
-enum player {
-    L,
-    R,
-}
-
-#[derive(Component, Clone, Copy)]
-struct Paddle {
-    p: player,
-}
-
-#[derive(Component, Clone, Copy)]
-struct Ball {
-    velocity: Vec3,
-}
-
-fn setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-) {
-    commands.spawn(Camera2d);
-    let l_padd = Rectangle::new(PADDLE_WIDTH, PADDLE_HEIGHT);
-    let r_padd = Rectangle::new(PADDLE_WIDTH, PADDLE_HEIGHT);
-    let ball = Rectangle::new(BALL_SIZE, BALL_SIZE);
-
-    // let mut shapes = [meshes.add(l_padd), meshes.add(r_padd), meshes.add(ball)];
-    let mut x: f32 = -0.5 * X_EXTENT;
-    let y: f32 = 0.0;
-    let z: f32 = 0.0;
-
-    commands
-        .spawn((
-            Mesh2d(meshes.add(l_padd)),
-            MeshMaterial2d(materials.add(Color::srgb(1.0, 0.0, 0.0))),
-            Transform::from_xyz(x, y, z),
-        ))
-        .insert(Paddle { p: player::L });
-
-    x = 0.5 * X_EXTENT;
-
-    commands
-        .spawn((
-            Mesh2d(meshes.add(r_padd)),
-            MeshMaterial2d(materials.add(Color::srgb(0.0, 0.0, 1.0))),
-            Transform::from_xyz(x, y, z),
-        ))
-        .insert(Paddle { p: player::R });
-
-    x = 0.0;
-
-    commands
-        .spawn((
-            Mesh2d(meshes.add(ball)),
-            MeshMaterial2d(materials.add(Color::WHITE)),
-            Transform::from_xyz(x, y, z),
-        ))
-        .insert(Ball {
-            velocity: Vec3::new(300.0, 150.0, 0.0),
-        });
-}
-
-fn paddle_movement(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<(&Paddle, &mut Transform)>,
-) {
-    for (paddle, mut transform) in query.iter_mut() {
-        let mut movement = Vec3::ZERO;
-        match paddle.p {
-            player::L => {
-                if keyboard_input.pressed(KeyCode::KeyA) {
-                    movement.y -= 1.0;
-                }
-                if keyboard_input.pressed(KeyCode::KeyD) {
-                    movement.y += 1.0;
-                }
-                if keyboard_input.pressed(KeyCode::KeyW) {
-                    movement.x -= 1.0;
-                }
-                if keyboard_input.pressed(KeyCode::KeyS) {
-                    movement.x += 1.0;
-                }
-            }
-            player::R => {
-                if keyboard_input.pressed(KeyCode::KeyJ) {
-                    movement.y -= 1.0;
-                }
-                if keyboard_input.pressed(KeyCode::KeyL) {
-                    movement.y += 1.0;
-                }
-                if keyboard_input.pressed(KeyCode::KeyI) {
-                    movement.x -= 1.0;
-                }
-                if keyboard_input.pressed(KeyCode::KeyK) {
-                    movement.x += 1.0;
-                }
-            }
-        }
-
-        transform.translation.x = transform
-            .translation
-            .x
-            .min(-0.5 * X_EXTENT)
-            .max(0.5 * X_EXTENT);
-        transform.translation.y = transform
-            .translation
-            .y
-            .min(-0.5 * Y_EXTENT)
-            .max(0.5 * Y_EXTENT);
-    }
-}
-
-fn ball_movement(mut query: Query<(&mut Ball, &mut Transform)>) {
-    for (mut ball, mut transform) in query.iter_mut() {
-        transform.translation += ball.velocity * 0.02;
-
-        // Reverse ball's direction when hitting the top or bottom of the window
-        if transform.translation.y >= 290.0 || transform.translation.y <= -290.0 {
-            ball.velocity.y *= -1.0;
-        }
-    }
-}
+// Movement speed constant
+const SPEED: f32 = 300.0;
+// Rectangle size
+const PLAYER_SIZE: Vec2 = Vec2::new(50.0, 100.0);
+// Window size
+// const WINDOW_SIZE: Vec2 = Vec2::new(800.0, 600.0);
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
-        .add_systems(Update, paddle_movement)
-        .add_systems(Update, ball_movement)
+        .add_systems(Update, player_movement)
         .run();
+}
+
+fn setup(mut commands: Commands) {
+    // Camera
+    commands.spawn(Camera2d);
+
+    // color
+    let color = Color::srgb(0.0, 1.0, 0.0);
+    // Player rectangle
+    commands.spawn((
+        Sprite::from_color(color, PLAYER_SIZE),
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        Player,
+    ));
+}
+
+fn player_movement(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    time: Res<Time>,
+    windows: Single<&Window>,
+    mut query: Query<&mut Transform, With<Player>>,
+) {
+    let mut player_transform = query.single_mut();
+    let mut direction = Vec3::ZERO;
+    let win_width = windows.width();
+    let win_height = windows.height();
+
+    // Get input direction
+    if keyboard.pressed(KeyCode::KeyW) {
+        direction.y += 1.0;
+    }
+    if keyboard.pressed(KeyCode::KeyS) {
+        direction.y -= 1.0;
+    }
+    if keyboard.pressed(KeyCode::KeyD) {
+        direction.x += 1.0;
+    }
+    if keyboard.pressed(KeyCode::KeyA) {
+        direction.x -= 1.0;
+    }
+
+    // Normalize direction to prevent faster diagonal movement
+    if direction != Vec3::ZERO {
+        direction = direction.normalize();
+    }
+
+    // Calculate new position
+    let new_position = player_transform.translation + direction * SPEED * time.delta_secs();
+
+    // Clamp position within window bounds
+    let half_size = PLAYER_SIZE / 2.0;
+    player_transform.translation.x = new_position.x.clamp(
+        -win_width / 2.0 + half_size.x,
+        win_width / 2.0 - half_size.x,
+    );
+    player_transform.translation.y = new_position.y.clamp(
+        -win_height / 2.0 + half_size.y,
+        win_height / 2.0 - half_size.y,
+    );
 }
