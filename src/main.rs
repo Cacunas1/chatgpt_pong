@@ -7,9 +7,15 @@ const PADDLE_HEIGHT: f32 = 100.0;
 const PADDLE_WIDTH: f32 = 20.0;
 const BALL_SIZE: f32 = 10.0;
 
+#[derive(Clone, Copy)]
+enum player {
+    L,
+    R,
+}
+
 #[derive(Component, Clone, Copy)]
 struct Paddle {
-    velocity: Vec3,
+    p: player,
 }
 
 #[derive(Component, Clone, Copy)]
@@ -38,9 +44,7 @@ fn setup(
             MeshMaterial2d(materials.add(Color::srgb(1.0, 0.0, 0.0))),
             Transform::from_xyz(x, y, z),
         ))
-        .insert(Paddle {
-            velocity: Vec3::ZERO,
-        });
+        .insert(Paddle { p: player::L });
 
     x = 0.5 * X_EXTENT;
 
@@ -50,9 +54,7 @@ fn setup(
             MeshMaterial2d(materials.add(Color::srgb(0.0, 0.0, 1.0))),
             Transform::from_xyz(x, y, z),
         ))
-        .insert(Paddle {
-            velocity: Vec3::ZERO,
-        });
+        .insert(Paddle { p: player::R });
 
     x = 0.0;
 
@@ -69,30 +71,51 @@ fn setup(
 
 fn paddle_movement(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<(&mut Paddle, &mut Transform)>,
+    mut query: Query<(&Paddle, &mut Transform)>,
 ) {
-    for (mut paddle, mut transform) in query.iter_mut() {
+    for (paddle, mut transform) in query.iter_mut() {
         let mut movement = Vec3::ZERO;
-        if keyboard_input.pressed(KeyCode::KeyA) {
-            movement.y -= 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::KeyD) {
-            movement.y += 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::KeyW) {
-            movement.x -= 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::KeyS) {
-            movement.x += 1.0;
-        }
-        if movement != Vec3::ZERO {
-            paddle.velocity = movement.normalize() * PADDLE_SPEED;
-        } else {
-            paddle.velocity = Vec3::ZERO;
+        match paddle.p {
+            player::L => {
+                if keyboard_input.pressed(KeyCode::KeyA) {
+                    movement.y -= 1.0;
+                }
+                if keyboard_input.pressed(KeyCode::KeyD) {
+                    movement.y += 1.0;
+                }
+                if keyboard_input.pressed(KeyCode::KeyW) {
+                    movement.x -= 1.0;
+                }
+                if keyboard_input.pressed(KeyCode::KeyS) {
+                    movement.x += 1.0;
+                }
+            }
+            player::R => {
+                if keyboard_input.pressed(KeyCode::KeyJ) {
+                    movement.y -= 1.0;
+                }
+                if keyboard_input.pressed(KeyCode::KeyL) {
+                    movement.y += 1.0;
+                }
+                if keyboard_input.pressed(KeyCode::KeyI) {
+                    movement.x -= 1.0;
+                }
+                if keyboard_input.pressed(KeyCode::KeyK) {
+                    movement.x += 1.0;
+                }
+            }
         }
 
-        transform.translation.x = transform.translation.x.min(390.0).max(-390.0);
-        transform.translation.y = transform.translation.y.min(290.0).max(-290.0);
+        transform.translation.x = transform
+            .translation
+            .x
+            .min(-0.5 * X_EXTENT)
+            .max(0.5 * X_EXTENT);
+        transform.translation.y = transform
+            .translation
+            .y
+            .min(-0.5 * Y_EXTENT)
+            .max(0.5 * Y_EXTENT);
     }
 }
 
