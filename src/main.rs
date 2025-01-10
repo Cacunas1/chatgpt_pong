@@ -19,9 +19,9 @@ struct Ball {
 // Movement speed constant
 const SPEED: f32 = 300.0;
 // Rectangle size
-const PLAYER_SIZE: Vec2 = Vec2::new(50.0, 100.0);
+const PLAYER_SIZE: Vec2 = Vec2::new(25.0, 150.0);
 // Rectangle size
-const BALL_SIZE: f32 = 50.0;
+const BALL_SIZE: f32 = 12.5;
 
 fn main() {
     App::new()
@@ -117,7 +117,8 @@ fn player_movement(
         }
 
         // Calculate new position
-        let new_position = player_transform.translation + direction * SPEED * time.delta_secs();
+        let new_position =
+            player_transform.translation + direction * 1.1 * SPEED * time.delta_secs();
 
         // Clamp position within window bounds
         let half_size = PLAYER_SIZE / 2.0;
