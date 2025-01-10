@@ -1,27 +1,26 @@
 use bevy::{input::keyboard::KeyCode, prelude::*};
 
-// Side of the player's paddle
 enum Side {
     L,
     R,
 }
-// Component to mark our player rectangle
+
 #[derive(Component)]
 struct Player {
     p: Side,
 }
 
-#[derive(Component, Debug)]
+#[derive(Component)]
 struct Ball {
     velocity: Vec2,
+    last_collision: Option<Entity>, // Track last collision to prevent multiple hits
 }
 
-// Movement speed constant
 const SPEED: f32 = 300.0;
-// Rectangle size
 const PLAYER_SIZE: Vec2 = Vec2::new(25.0, 150.0);
-// Rectangle size
 const BALL_SIZE: f32 = 12.5;
+const MIN_BALL_SPEED: f32 = 200.0;
+const MAX_BALL_SPEED: f32 = 400.0;
 
 fn main() {
     App::new()
@@ -35,25 +34,30 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    window: Single<&Window>,
 ) {
-    // Camera
     commands.spawn(Camera2d);
+    let win_width = window.width();
+    let xr = 0.5 * win_width - PLAYER_SIZE.x;
+    let xl = -xr;
 
-    // colors
     let green = Color::srgb(0.0, 1.0, 0.0);
     let red = Color::srgb(1.0, 0.0, 0.0);
-    // Player rectangle
+
+    // Left paddle
     commands.spawn((
         Sprite::from_color(green, PLAYER_SIZE),
-        Transform::from_xyz(-150.0, 0.0, 0.0),
+        Transform::from_xyz(xl, 0.0, 0.0),
         Player { p: Side::L },
     ));
-    // Player rectangle
+
+    // Right paddle
     commands.spawn((
         Sprite::from_color(red, PLAYER_SIZE),
-        Transform::from_xyz(150.0, 0.0, 0.0),
+        Transform::from_xyz(xr, 0.0, 0.0),
         Player { p: Side::R },
     ));
+
     // Ball
     let ball = Circle::new(BALL_SIZE);
     commands
@@ -64,6 +68,7 @@ fn setup(
         ))
         .insert(Ball {
             velocity: Vec2::new(300.0, 150.0),
+            last_collision: None,
         });
 }
 
@@ -111,24 +116,22 @@ fn player_movement(
             }
         };
 
-        // Normalize direction to prevent faster diagonal movement
         if direction != Vec3::ZERO {
             direction = direction.normalize();
         }
 
-        // Calculate new position
         let new_position =
             player_transform.translation + direction * 1.1 * SPEED * time.delta_secs();
 
         // Clamp position within window bounds
-        let half_size = PLAYER_SIZE / 2.0;
+        let half_size = 0.5 * PLAYER_SIZE;
         player_transform.translation.x = new_position.x.clamp(
-            -win_width / 2.0 + half_size.x,
-            win_width / 2.0 - half_size.x,
+            -0.5 * win_width + half_size.x,
+            0.5 * win_width - half_size.x,
         );
         player_transform.translation.y = new_position.y.clamp(
-            -win_height / 2.0 + half_size.y,
-            win_height / 2.0 - half_size.y,
+            -0.5 * win_height + half_size.y,
+            0.5 * win_height - half_size.y,
         );
     }
 }
@@ -137,57 +140,110 @@ fn ball_movement(
     time: Res<Time>,
     windows: Single<&Window>,
     mut ball_query: Query<(&mut Transform, &mut Ball)>,
-    player_query: Query<&Transform, (With<Player>, Without<Ball>)>,
+    player_query: Query<(Entity, &Transform), (With<Player>, Without<Ball>)>,
 ) {
     let win_width = windows.width();
     let win_height = windows.height();
 
     for (mut ball_transform, mut ball) in ball_query.iter_mut() {
+        let delta = time.delta_secs();
+
+        // Store previous position for collision resolution
+        let previous_pos = ball_transform.translation;
+
         // Move ball
-        let translation = &mut ball_transform.translation;
-        translation.x += ball.velocity.x * time.delta_secs();
-        translation.y += ball.velocity.y * time.delta_secs();
+        ball_transform.translation.x += ball.velocity.x * delta;
+        ball_transform.translation.y += ball.velocity.y * delta;
 
-        // Ball collision box
-        let ball_left = translation.x - BALL_SIZE;
-        let ball_right = translation.x + BALL_SIZE;
-        let ball_top = translation.y + BALL_SIZE;
-        let ball_bottom = translation.y - BALL_SIZE;
+        // Ball collision bounds
+        let ball_bounds = Rect {
+            left: ball_transform.translation.x - BALL_SIZE,
+            right: ball_transform.translation.x + BALL_SIZE,
+            top: ball_transform.translation.y + BALL_SIZE,
+            bottom: ball_transform.translation.y - BALL_SIZE,
+        };
 
-        // Check for collisions with players
-        for player_transform in player_query.iter() {
-            let player_size = PLAYER_SIZE / 2.0;
-            let player_left = player_transform.translation.x - player_size.x;
-            let player_right = player_transform.translation.x + player_size.x;
-            let player_top = player_transform.translation.y + player_size.y;
-            let player_bottom = player_transform.translation.y - player_size.y;
+        // Check paddle collisions
+        for (player_entity, player_transform) in player_query.iter() {
+            if ball.last_collision == Some(player_entity) {
+                continue; // Skip if we just collided with this paddle
+            }
 
-            // Simple AABB collision detection
-            if ball_right >= player_left
-                && ball_left <= player_right
-                && ball_top >= player_bottom
-                && ball_bottom <= player_top
-            {
-                // Reverse x direction and add some randomness to y velocity
+            let player_bounds = Rect {
+                left: player_transform.translation.x - PLAYER_SIZE.0 .5 * x,
+                right: player_transform.translation.x + PLAYER_SIZE.0 .5 * x,
+                top: player_transform.translation.y + PLAYER_SIZE.0 .5 * y,
+                bottom: player_transform.translation.y - PLAYER_SIZE.0 .5 * y,
+            };
+
+            if check_collision(&ball_bounds, &player_bounds) {
+                // Calculate collision response
+                let hit_position = (ball_transform.translation.y - player_transform.translation.y)
+                    / (PLAYER_SIZE.0 .5 * y);
+
+                // Reverse x direction
                 ball.velocity.x = -ball.velocity.x;
-                ball.velocity.y +=
-                    (translation.y - player_transform.translation.y) / player_size.y * SPEED * 0.5;
 
-                // Normalize velocity to maintain constant speed
-                ball.velocity = ball.velocity.normalize() * SPEED;
+                // Add vertical velocity based on where the ball hits the paddle
+                ball.velocity.y = hit_position * SPEED * 0.8;
+
+                // Ensure the ball maintains a minimum speed
+                let speed = ball.velocity.length();
+                if speed < MIN_BALL_SPEED {
+                    ball.velocity = ball.velocity.normalize() * MIN_BALL_SPEED;
+                } else if speed > MAX_BALL_SPEED {
+                    ball.velocity = ball.velocity.normalize() * MAX_BALL_SPEED;
+                }
+
+                // Move ball out of collision
+                if ball.velocity.x > 0.0 {
+                    ball_transform.translation.x = player_bounds.left - BALL_SIZE;
+                } else {
+                    ball_transform.translation.x = player_bounds.right + BALL_SIZE;
+                }
+
+                // Remember this collision
+                ball.last_collision = Some(player_entity);
             }
         }
 
-        // Bounce off window borders
-        if ball_right >= win_width / 2.0 || ball_left <= -win_width / 2.0 {
-            // Reset ball to center if it hits left or right walls
-            translation.x = 0.0;
-            translation.y = 0.0;
-            ball.velocity = Vec2::new(1.0, 0.5).normalize() * SPEED;
+        // Window bounds collision
+        if ball_bounds.right >= 0.5 * win_width || ball_bounds.left <= -0.5 * win_width {
+            // Reset ball to center
+            ball_transform.translation.x = 0.0;
+            ball_transform.translation.y = 0.0;
+            ball.velocity = Vec2::new(
+                if ball_bounds.left <= -0.5 * win_width {
+                    1.0
+                } else {
+                    -1.0
+                },
+                0.5,
+            )
+            .normalize()
+                * MIN_BALL_SPEED;
+            ball.last_collision = None;
         }
 
-        if ball_top >= win_height / 2.0 || ball_bottom <= -win_height / 2.0 {
-            ball.velocity.y = -ball.velocity.y;
+        if ball_bounds.top >= 0.5 * win_height {
+            ball_transform.translation.y = 0.5 * win_height - BALL_SIZE;
+            ball.velocity.y = -ball.velocity.y.abs();
+            ball.last_collision = None;
+        } else if ball_bounds.bottom <= -0.5 * win_height {
+            ball_transform.translation.y = -0.5 * win_height + BALL_SIZE;
+            ball.velocity.y = ball.velocity.y.abs();
+            ball.last_collision = None;
         }
     }
+}
+
+struct Rect {
+    left: f32,
+    right: f32,
+    top: f32,
+    bottom: f32,
+}
+
+fn check_collision(a: &Rect, b: &Rect) -> bool {
+    a.left < b.right && a.right > b.left && a.top > b.bottom && a.bottom < b.top
 }
